@@ -30,7 +30,7 @@
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = []
+extensions = ['rst2pdf.pdfbuilder']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -38,8 +38,8 @@ templates_path = ['_templates']
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
-# source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ['.rst', '.md']
+#source_suffix = '.rst'
 
 # The master toctree document.
 master_doc = 'index'
@@ -116,7 +116,7 @@ htmlhelp_basename = 'loam_velodynedoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+#latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
@@ -132,7 +132,21 @@ latex_elements = {
     # Latex figure (float) alignment
     #
     # 'figure_align': 'htbp',
-}
+#}
+
+latex_elements = {
+        #...
+        # Additional stuff for the LaTeX preamble.
+        'preamble': '''
+        \usepackage{xeCJK}
+        \usepackage{indentfirst}
+        \setlength{\parindent}{2em}
+        \setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi_GB2312]{SimSun}
+        \setCJKmonofont[Scale=0.9]{KaiTi_GB2312}
+        \setCJKfamilyfont{song}[BoldFont=SimSun]{SimSun}
+        \setCJKfamilyfont{sf}[BoldFont=SimSun]{SimSun}
+        ''',
+        }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
@@ -164,5 +178,14 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
+pdf_documents = [
+          ('index', u'LoamVelodyne', u'LoamVelodyne', u'improve100'),
+          ]
+pdf_stylesheets = ['a3','zh_CN']
+pdf_language = "zh_CN"
+pdf_fit_mode = "shrink"
+pdf_toc_depth = 2
+pdf_use_numbered_links = False
+pdf_fit_background_mode = 'scale'
 
 

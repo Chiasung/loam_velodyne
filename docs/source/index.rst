@@ -9,18 +9,18 @@ Welcome to loam_velodyne's documentation!
 
    本文档仅供参考
 
-目录：
+目录:
 ^^^^^
 
 .. toctree::
    :maxdepth: 2
    :glob:
 
-   ScanRegistration/index
-   MultiScanRegistration/index
-   LaserOdometry/index
-   LaserMapping/index
-   TransformMaintenance/index
+   ScanRegistration/scanregistration
+   MultiScanRegistration/multiscanregistration
+   LaserOdometry/laserodometry
+   LaserMapping/lasermapping
+   TransformMaintenance/transformmaintenance
 
 Indices and tables
 ==================

@@ -1,0 +1,21 @@
+{
+"styles":
+{
+"base":
+{
+"wordWrap": "CJK"
+}
+
+},
+"embeddedFonts" : [["wqy-zenhei.ttf","msyhbd.ttf","wqy-zenhei.ttf","wqy-zenhei.ttf"]],
+
+"fontsAlias" : {
+
+"stdFont": "wqy-zenhei",
+
+"stdBold": "msyhbd",
+
+"stdItalic": "wqy-zenhei"
+
+}
+}

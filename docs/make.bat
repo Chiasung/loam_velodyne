@@ -9,7 +9,7 @@ if "%SPHINXBUILD%" == "" (
 )
 set SOURCEDIR=source
 set BUILDDIR=build
-set SPHINXPROJ=loam_velodyne
+set SPHINXPROJ=velodyloam_velodyne
 
 if "%1" == "" goto help
 
