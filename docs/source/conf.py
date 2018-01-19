@@ -135,27 +135,26 @@ htmlhelp_basename = 'loam_velodynedoc'
     # 'figure_align': 'htbp',
 #}
 
-latex_elements = {
-        #...
-        # Additional stuff for the LaTeX preamble.
-        'preamble': '''
-        \usepackage{xeCJK}
-        \usepackage{indentfirst}
-        \setlength{\parindent}{2em}
-        \setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi_GB2312]{SimSun}
-        \setCJKmonofont[Scale=0.9]{KaiTi_GB2312}
-        \setCJKfamilyfont{song}[BoldFont=SimSun]{SimSun}
-        \setCJKfamilyfont{sf}[BoldFont=SimSun]{SimSun}
-        ''',
-        }
+#latex_elements = { #        #...
+#        # Additional stuff for the LaTeX preamble.
+#        'preamble': '''
+#        \usepackage{xeCJK}
+#        \usepackage{indentfirst}
+#        \setlength{\parindent}{2em}
+#        \setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi_GB2312]{SimSun}
+#        \setCJKmonofont[Scale=0.9]{KaiTi_GB2312}
+#        \setCJKfamilyfont{song}[BoldFont=SimSun]{SimSun}
+#        \setCJKfamilyfont{sf}[BoldFont=SimSun]{SimSun}
+#        ''',
+#        }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
-latex_documents = [
-    (master_doc, 'loam_velodyne.tex', u'loam\\_velodyne 源码解析',
-     u'cj.tong', 'manual'),
-]
+#latex_documents = [
+#    (master_doc, 'loam_velodyne.tex', u'loam\\_velodyne 源码解析',
+#     u'cj.tong', 'manual'),
+#]
 
 
 # -- Options for manual page output ---------------------------------------
@@ -179,14 +178,14 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
-pdf_documents = [
-          ('index', u'LoamVelodyne', u'LoamVelodyne', u'cj.tong'),
-          ]
-pdf_stylesheets = ['a3','zh_CN']
-pdf_language = "zh_CN"
-pdf_fit_mode = "shrink"
-pdf_toc_depth = 2
-pdf_use_numbered_links = False
-pdf_fit_background_mode = 'scale'
+#pdf_documents = [
+#          ('index', u'LoamVelodyne', u'LoamVelodyne', u'cj.tong'),
+#          ]
+#pdf_stylesheets = ['a3','zh_CN']
+#pdf_language = "zh_CN"
+#pdf_fit_mode = "shrink"
+#pdf_toc_depth = 2
+#pdf_use_numbered_links = False
+#pdf_fit_background_mode = 'scale'
 
 
