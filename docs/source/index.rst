@@ -3,28 +3,9 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to loam_velodyne's documentation!
-=========================================
-.. Note::
-
-   本文档仅供参考
-
-目录:
-^^^^^
-
-.. toctree::
-   :maxdepth: 2
-   :glob:
-
    ScanRegistration/scanregistration
    MultiScanRegistration/multiscanregistration
    LaserOdometry/laserodometry
    LaserMapping/lasermapping
    TransformMaintenance/transformmaintenance
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

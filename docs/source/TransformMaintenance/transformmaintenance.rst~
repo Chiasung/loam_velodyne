@@ -1,0 +1,553 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>LaserOdometry源码分析 &mdash; loam_velodyne 1.0.1 文档</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="索引"
+              href="../genindex.html"/>
+        <link rel="search" title="搜索" href="../search.html"/>
+    <link rel="top" title="loam_velodyne 1.0.1 文档" href="../index.html"/>
+        <link rel="next" title="LaserMapping源码分析" href="../LaserMapping/lasermapping.html"/>
+        <link rel="prev" title="ScanRegistration源码分析" href="../ScanRegistration/scanregistration.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> loam_velodyne
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                1.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../MultiScanRegistration/multiscanregistration.html">MultiScanRegistration源码分析</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ScanRegistration/scanregistration.html">ScanRegistration源码分析</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">LaserOdometry源码分析</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../LaserMapping/lasermapping.html">LaserMapping源码分析</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../TransformMaintenance/transformmaintenance.html">TransformMaintenance源码分析</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">loam_velodyne</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>LaserOdometry源码分析</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/LaserOdometry/laserodometry.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="laserodometry">
+<h1>LaserOdometry源码分析<a class="headerlink" href="#laserodometry" title="永久链接至标题">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">注解</p>
+<p class="last">LM最小二乘法参考：<a class="reference external" href="https://wenku.baidu.com/view/74f5f9f4fad6195f312ba6e9.html?from=search">https://wenku.baidu.com/view/74f5f9f4fad6195f312ba6e9.html?from=search</a></p>
+</div>
+<p>这篇文章将对该系统的第二大部分laserOdometry进行深入的解读，其中会有一些公式的推到和一些关于L-M求解最小二乘的方法，不太了解的同学可以先自行学习一下，参考上面链接。
+我们先回顾一下scanRegistration的工作。它让我们获得了各种特征的点云，那配准工作就可以进行了：我们利用scanRegistration分别获得t时刻和t+1时刻点云中的特征点，然后建立这两部分点云的一一对应关系。
+先看一下输入输出：</p>
+<img alt="../_images/node_graph2.jpg" class="align-center" src="../_images/node_graph2.jpg" />
+<p>laserodometry节点的套路和multiscanregistration差不多</p>
+<div class="highlight-default"><div class="highlight"><pre><span class="o">/**</span> <span class="n">Main</span> <span class="n">node</span> <span class="n">entry</span> <span class="n">point</span><span class="o">.</span> <span class="o">*/</span>
+<span class="nb">int</span> <span class="n">main</span><span class="p">(</span><span class="nb">int</span> <span class="n">argc</span><span class="p">,</span> <span class="n">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">ros</span><span class="p">::</span><span class="n">init</span><span class="p">(</span><span class="n">argc</span><span class="p">,</span> <span class="n">argv</span><span class="p">,</span> <span class="s2">&quot;laserOdometry&quot;</span><span class="p">);</span>
+  <span class="n">ros</span><span class="p">::</span><span class="n">NodeHandle</span> <span class="n">node</span><span class="p">;</span>
+  <span class="n">ros</span><span class="p">::</span><span class="n">NodeHandle</span> <span class="n">privateNode</span><span class="p">(</span><span class="s2">&quot;~&quot;</span><span class="p">);</span>
+
+  <span class="n">loam</span><span class="p">::</span><span class="n">LaserOdometry</span> <span class="n">laserOdom</span><span class="p">(</span><span class="mf">0.1</span><span class="p">);</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">laserOdom</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">privateNode</span><span class="p">))</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">initialization</span> <span class="n">successful</span>
+    <span class="n">laserOdom</span><span class="o">.</span><span class="n">spin</span><span class="p">();</span>
+  <span class="p">}</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>setup()中完成参数读取，订阅scanRegistration节点发布的/laser_cloud_sharp、/laser_cloud_less_sharp、pubSurfPointFlat、pubSurfPointLessFlat、/velodyne_cloud_2、/imu_trans消息，并分别调用回调函数laserCloudSharpHandler、laserCloudLessSharpHandler、laserCloudFlatHandler、laserCloudLessFlatHandler、laserCloudFullResHandler、imuTransHandler处理这些边特征、面特征、全部点云和IMU数据，把他们从ROS::Msg类型转换成程序可以处理的pcl点云类型；发布器pubLaserCloudCornerLast、pubLaserCloudSurfLast、pubLaserCloudFullRes、pubLaserOdometry分别发布/laser_cloud_corner_last、/laser_cloud_surf_last、/velodyne_cloud_3、/laser_odom_to_init消息。其中/laser_odom_to_init消息的发布频率高，其余三个消息每接收到三次scanRegistration节点的消息才发布一次。
+然后spin()调用process()处理，如果我们订阅到了scanRegistration节点发布的消息，那么就可以开始计算处理工作了！计算过程分为三步：初始化、点云处理、坐标转换。下面一步一步来看：</p>
+<div class="highlight-default"><div class="highlight"><pre>void LaserOdometry::process()
+{//判断数据是否到来
+  if (!hasNewData()) {
+    // waiting for new data to arrive...
+    return;
+  }
+
+  // reset flags, etc.初始化topic是否到来的flag
+  reset();
+
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li>初始化开始
+计算前来个热身，做一步初始化的工作。</li>
+</ol>
+<div class="highlight-default"><div class="highlight"><pre>  if (!_systemInited){ // 将订阅的数据保存为上一时刻的数据
+    _cornerPointsLessSharp.swap(_lastCornerCloud);
+    _surfPointsLessFlat.swap(_lastSurfaceCloud);
+//将边特征，平面特征点云存到kdtree
+    _lastCornerKDTree.setInputCloud(_lastCornerCloud);
+    _lastSurfaceKDTree.setInputCloud(_lastSurfaceCloud);
+
+    _transformSum.rot_x += _imuPitchStart;
+    _transformSum.rot_z += _imuRollStart;
+
+    _systemInited = true;
+    return;
+  }
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li>点云配准与运动估计
+这部分是整个laserOdometry节点的重中之重。假设你现在已经得到了两块点云，对他们进行处理之前你首先得保证这些特征点足够多，否则你带了两块没有任何特征的点没办法进行匹配，用程序表达就是设定一个阈值进行判断。</li>
+</ol>
+<div class="highlight-default"><div class="highlight"><pre>  pcl::PointXYZI coeff;//雅克比矩阵值
+  bool isDegenerate = false;
+  Eigen::Matrix&lt;float,6,6&gt; matP;
+
+  _frameCount++;
+  _transform.pos -= _imuVeloFromStart * _scanPeriod;
+
+
+  size_t lastCornerCloudSize = _lastCornerCloud-&gt;points.size();
+  size_t lastSurfaceCloudSize = _lastSurfaceCloud-&gt;points.size();
+// 上一时刻特征边(曲率大)上的点云个数大于10， 特征面内的点云大于100 保证足够多的特征点可用于t+1时刻的匹配
+  if (lastCornerCloudSize &gt; 10 &amp;&amp; lastSurfaceCloudSize &gt; 100) {
+    std::vector&lt;int&gt; pointSearchInd(1);
+    std::vector&lt;float&gt; pointSearchSqDis(1);
+    std::vector&lt;int&gt; indices;
+
+    pcl::removeNaNFromPointCloud(*_cornerPointsSharp, *_cornerPointsSharp, indices);//剔除一些异常点
+    size_t cornerPointsSharpNum = _cornerPointsSharp-&gt;points.size();//边特征个数
+    size_t surfPointsFlatNum = _surfPointsFlat-&gt;points.size();//平面特征个数
+
+    _pointSearchCornerInd1.resize(cornerPointsSharpNum);
+    _pointSearchCornerInd2.resize(cornerPointsSharpNum);
+    _pointSearchSurfInd1.resize(surfPointsFlatNum);
+    _pointSearchSurfInd2.resize(surfPointsFlatNum);
+    _pointSearchSurfInd3.resize(surfPointsFlatNum);
+</pre></div>
+</div>
+<p>在点云足够多的条件下，终于要开始正式工作了。这里我们设定整个L-M运动估计的迭代次数为25次，以保证运算效率。迭代部分又可分为：对特征边/面上的点进行处理，构建Jaccobian矩阵，L-M运动估计求解。L-M方法其实就是非线性最小二乘，是Gauss-Newton优化的一种改进（增加了一个阻尼因子，代码中的s），所以关键在于如何把点云配准和运动估计的问题转换为L-M优化求解的问题。主要思路就是：构建约束方程 -&gt; 约束方程求偏导构建Jaccobian矩阵 -&gt; L-M求解。下面再一步一步来看：关于构建约束方程的问题就是这节标题中提到的点云配准的问题，其基本思想就是从上一帧点云中找到一些边/面特征点，在当前帧点云中同样找这么一些点，建立他们之间的约束关系。
+特征边/面上的点配准</p>
+<img alt="../_images/edge_surf.jpg" class="align-center" src="../_images/edge_surf.jpg" />
+<p>找t+1时刻的某个特征边/面上的点在t时刻下对应的配准点，论文作者给出如上图的思路。特征线：利用KD树找点i在t时刻点云中最近的一点j，并在j周围（上下几条线的范围内）找次近点l，于是我们把（j，l）称为点i在t时刻点云中的对应。特征面：与特征线类似，先找最近点j，在j周围找l，在j周围找m，将（j，l，m）称为点i在t时刻点云中的对应。代码实现如下：</p>
+<div class="highlight-default"><div class="highlight"><pre>    for (size_t iterCount = 0; iterCount &lt; _maxIterations; iterCount++) {
+      pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
+      _laserCloudOri-&gt;clear();
+      _coeffSel-&gt;clear();//两时刻点云配准协方差
+
+      for (int i = 0; i &lt; cornerPointsSharpNum; i++) {
+        transformToStart(_cornerPointsSharp-&gt;points[i], pointSel);// 将点坐标转换到起始点云坐标系中
+
+        if (iterCount % 5 == 0) {//降低匹配次数，每隔5次迭代一次
+          pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
+          _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
+// 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
+          int closestPointInd = -1, minPointInd2 = -1;
+          if (pointSearchSqDis[0] &lt; 25) {//两桢之间的变换不会太剧烈，25作为阈值
+            closestPointInd = pointSearchInd[0];
+            int closestPointScan = int(_lastCornerCloud-&gt;points[closestPointInd].intensity);//pointSel对应上一桢的那一线？closestPointScan
+//找到closestPointInd后找次近邻点的索引,作者没有直接nearKSearch找最近的两个点，也为了考虑这两个点要有效的吧，下面是不同约束，不能差3线以上，不能距离过大。
+            float pointSqDis, minPointSqDis2 = 25;
+            for (int j = closestPointInd + 1; j &lt; cornerPointsSharpNum; j++) {
+              if (int(_lastCornerCloud-&gt;points[j].intensity) &gt; closestPointScan + 2.5) {// 找到与最邻近点相距3条线的特征点时跳出
+                break;
+              }
+
+              pointSqDis = calcSquaredDiff(_lastCornerCloud-&gt;points[j], pointSel);//直接计算，没有用nearksearch查找
+
+              if (int(_lastCornerCloud-&gt;points[j].intensity) &gt; closestPointScan) {
+                if (pointSqDis &lt; minPointSqDis2) {
+                  minPointSqDis2 = pointSqDis;
+                  minPointInd2 = j;
+                }
+              }
+            }
+            for (int j = closestPointInd - 1; j &gt;= 0; j--) {// 向下三条线，找次临近点
+              if (int(_lastCornerCloud-&gt;points[j].intensity) &lt; closestPointScan - 2.5) {
+                break;
+              }
+
+              pointSqDis = calcSquaredDiff(_lastCornerCloud-&gt;points[j], pointSel);
+
+              if (int(_lastCornerCloud-&gt;points[j].intensity) &lt; closestPointScan) {
+                if (pointSqDis &lt; minPointSqDis2) {
+                  minPointSqDis2 = pointSqDis;
+                  minPointInd2 = j;
+                }
+              }
+            }
+          }
+
+          _pointSearchCornerInd1[i] = closestPointInd;// 当前所有边特征点在上一时刻边特征点云中对应的最邻近点的索引
+          _pointSearchCornerInd2[i] = minPointInd2;// 当前所有边特征点在上一时刻边特征点云中对应的次邻近点的索引
+            }
+        }
+</pre></div>
+</div>
+<p>特征面最近邻和次近邻查找和边特征类似的思想，这里需要指出的是：并不是每次运动估计完成一次迭代，就进行一次坐标转换，然后在整个点云范围内搜索其最近点。这里设定了一个5次的阈值，每五次搜索一次，以保证运行效率。接下来构建Jaccobian矩阵，我们之所以去找配准点，目的在于找到不同时刻的两块点云间的约束关系。那么他们之间有什么约束关系呢？作者分别给了关于线和面的两个约束方程（点到直线的距离，点到平面的距离）：</p>
+<img alt="../_images/edge.jpg" class="align-center" src="../_images/edge.jpg" />
+<img alt="../_images/surf.jpg" class="align-center" src="../_images/surf.jpg" />
+<p>根据公式(2)-(3)我们有了这两块点云的约束方程，构建Jaccobian矩阵就直接对待估参数求偏导就ok了。再看对应程序中如何实现偏导的：
+特征线：</p>
+<div class="highlight-default"><div class="highlight"><pre>	<span class="o">/*</span><span class="n">Jaccobian</span><span class="o">*/</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">_pointSearchCornerInd2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+          <span class="n">const</span> <span class="n">pcl</span><span class="p">::</span><span class="n">PointXYZI</span>  <span class="o">&amp;</span><span class="n">A</span> <span class="o">=</span> <span class="n">_lastCornerCloud</span><span class="o">-&gt;</span><span class="n">points</span><span class="p">[</span><span class="n">_pointSearchCornerInd1</span><span class="p">[</span><span class="n">i</span><span class="p">]];</span>
+          <span class="n">const</span> <span class="n">pcl</span><span class="p">::</span><span class="n">PointXYZI</span>  <span class="o">&amp;</span><span class="n">B</span> <span class="o">=</span> <span class="n">_lastCornerCloud</span><span class="o">-&gt;</span><span class="n">points</span><span class="p">[</span><span class="n">_pointSearchCornerInd2</span><span class="p">[</span><span class="n">i</span><span class="p">]];</span>
+          <span class="n">pcl</span><span class="p">::</span><span class="n">PointXYZI</span> <span class="n">coefficients</span><span class="p">;</span>
+          <span class="k">if</span><span class="p">(</span><span class="n">getCornerFeatureCoefficients</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">pointSel</span><span class="p">,</span> <span class="n">iterCount</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">))</span> <span class="p">{</span>
+            <span class="n">_laserCloudOri</span><span class="o">-&gt;</span><span class="n">push_back</span><span class="p">(</span><span class="n">_cornerPointsSharp</span><span class="o">-&gt;</span><span class="n">points</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+            <span class="n">_coeffSel</span><span class="o">-&gt;</span><span class="n">push_back</span><span class="p">(</span><span class="n">coefficients</span><span class="p">);</span><span class="o">//</span><span class="n">求得的雅克比矩阵</span>
+          <span class="p">}</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+</pre></div>
+</div>
+<p>至此Jaccobian矩阵就构建完毕了。每个特征点对应的Jaccobian矩阵的三个元素都保存在coeffSel中，后面采用L-M方法解算的时候直接调用就行了。
+L-M运动估计求解解算前首先要搞清楚要怎么表达Lidar的姿态，论文中给出公式：</p>
+<img alt="../_images/transform.jpg" src="../_images/transform.jpg" />
+<img alt="../_images/nextX.jpg" src="../_images/nextX.jpg" />
+<img alt="../_images/rodrigues.jpg" src="../_images/rodrigues.jpg" />
+<p>我们认为Lidar匀速运动，因此公式(4)实现了Lidar变换矩阵的内插，得到其扫描点i时刻的位姿
+公式(5)就是经典的刚体的旋转平移变换。
+公式(6)为罗德里格斯公式，将旋转矩阵用旋转矢量表示，这种方法的最大优势在于节约计算所消耗的资源。
+公式(7)-(8)分别为旋转矢量公式中的参数计算。搞清楚这些以后，就开始L-M的计算了;
+这就是LM的解算过程，具体程序实现：</p>
+<div class="highlight-default"><div class="highlight"><pre>//LM进行运动估计，matA是雅克比矩阵，matAt*matA*matX = matAt*matB;其中matX是步长,（roll , ptich ,yaw,x,y,z）
+      Eigen::Matrix&lt;float,Eigen::Dynamic,6&gt; matA(pointSelNum, 6);
+      Eigen::Matrix&lt;float,6,Eigen::Dynamic&gt; matAt(6,pointSelNum);
+      Eigen::Matrix&lt;float,6,6&gt; matAtA;
+      Eigen::VectorXf matB(pointSelNum);
+      Eigen::Matrix&lt;float,6,1&gt; matAtB;
+      Eigen::Matrix&lt;float,6,1&gt; matX;
+
+      for (int i = 0; i &lt; pointSelNum; i++) {
+        const pcl::PointXYZI&amp; pointOri = _laserCloudOri-&gt;points[i];
+        coeff = _coeffSel-&gt;points[i];
+
+        float s = 1;
+
+        float srx = sin(s * _transform.rot_x.rad());
+        float crx = cos(s * _transform.rot_x.rad());
+        float sry = sin(s * _transform.rot_y.rad());
+        float cry = cos(s * _transform.rot_y.rad());
+        float srz = sin(s * _transform.rot_z.rad());
+        float crz = cos(s * _transform.rot_z.rad());
+        float tx = s * _transform.pos.x();
+        float ty = s * _transform.pos.y();
+        float tz = s * _transform.pos.z();
+
+        float arx = (-s*crx*sry*srz*pointOri.x + s*crx*crz*sry*pointOri.y + s*srx*sry*pointOri.z
+                     + s*tx*crx*sry*srz - s*ty*crx*crz*sry - s*tz*srx*sry) * coeff.x
+                    + (s*srx*srz*pointOri.x - s*crz*srx*pointOri.y + s*crx*pointOri.z
+                       + s*ty*crz*srx - s*tz*crx - s*tx*srx*srz) * coeff.y
+                    + (s*crx*cry*srz*pointOri.x - s*crx*cry*crz*pointOri.y - s*cry*srx*pointOri.z
+                       + s*tz*cry*srx + s*ty*crx*cry*crz - s*tx*crx*cry*srz) * coeff.z;
+
+        float ary = ((-s*crz*sry - s*cry*srx*srz)*pointOri.x
+                     + (s*cry*crz*srx - s*sry*srz)*pointOri.y - s*crx*cry*pointOri.z
+                     + tx*(s*crz*sry + s*cry*srx*srz) + ty*(s*sry*srz - s*cry*crz*srx)
+                     + s*tz*crx*cry) * coeff.x
+                    + ((s*cry*crz - s*srx*sry*srz)*pointOri.x
+                       + (s*cry*srz + s*crz*srx*sry)*pointOri.y - s*crx*sry*pointOri.z
+                       + s*tz*crx*sry - ty*(s*cry*srz + s*crz*srx*sry)
+                       - tx*(s*cry*crz - s*srx*sry*srz)) * coeff.z;
+
+        float arz = ((-s*cry*srz - s*crz*srx*sry)*pointOri.x + (s*cry*crz - s*srx*sry*srz)*pointOri.y
+                     + tx*(s*cry*srz + s*crz*srx*sry) - ty*(s*cry*crz - s*srx*sry*srz)) * coeff.x
+                    + (-s*crx*crz*pointOri.x - s*crx*srz*pointOri.y
+                       + s*ty*crx*srz + s*tx*crx*crz) * coeff.y
+                    + ((s*cry*crz*srx - s*sry*srz)*pointOri.x + (s*crz*sry + s*cry*srx*srz)*pointOri.y
+                       + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;
+
+        float atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y
+                    - s*(crz*sry + cry*srx*srz) * coeff.z;
+
+        float aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y
+                    - s*(sry*srz - cry*crz*srx) * coeff.z;
+
+        float atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;
+
+        float d2 = coeff.intensity;
+
+        matA(i, 0) = arx;
+        matA(i, 1) = ary;
+        matA(i, 2) = arz;
+        matA(i, 3) = atx;
+        matA(i, 4) = aty;
+        matA(i, 5) = atz;
+        matB(i, 0) = -0.05 * d2;
+      }
+      //QR
+      matAt = matA.transpose();
+      matAtA = matAt * matA;
+      matAtB = matAt * matB;
+
+      matX = matAtA.colPivHouseholderQr().solve(matAtB);
+
+      if (iterCount == 0) {
+        Eigen::Matrix&lt;float,1,6&gt; matE;
+        Eigen::Matrix&lt;float,6,6&gt; matV;
+        Eigen::Matrix&lt;float,6,6&gt; matV2;
+
+        Eigen::SelfAdjointEigenSolver&lt; Eigen::Matrix&lt;float,6, 6&gt; &gt; esolver(matAtA);
+        matE = esolver.eigenvalues().real();
+        matV = esolver.eigenvectors().real();
+
+        matV2 = matV;
+
+        isDegenerate = false;
+        float eignThre[6] = {10, 10, 10, 10, 10, 10};
+        for (int i = 5; i &gt;= 0; i--) {
+          if (matE(0, i) &lt; eignThre[i]) {
+            for (int j = 0; j &lt; 6; j++) {
+              matV2(i, j) = 0;
+            }
+            isDegenerate = true;
+          } else {
+            break;
+          }
+        }
+        matP = matV.inverse() * matV2;
+      }
+
+      if (isDegenerate) {
+        Eigen::Matrix&lt;float,6,1&gt; matX2;
+        matX2 = matX;
+        matX = matP * matX2;
+      }
+
+      _transform.rot_x = _transform.rot_x.rad() + matX(0, 0);
+      _transform.rot_y = _transform.rot_y.rad() + matX(1, 0);
+      _transform.rot_z = _transform.rot_z.rad() + matX(2, 0);
+      _transform.pos.x() += matX(3, 0);
+      _transform.pos.y() += matX(4, 0);
+      _transform.pos.z() += matX(5, 0);
+
+      if( !pcl_isfinite(_transform.rot_x.rad()) ) _transform.rot_x = Angle();
+      if( !pcl_isfinite(_transform.rot_y.rad()) ) _transform.rot_y = Angle();
+      if( !pcl_isfinite(_transform.rot_z.rad()) ) _transform.rot_z = Angle();
+
+      if( !pcl_isfinite(_transform.pos.x()) ) _transform.pos.x() = 0.0;
+      if( !pcl_isfinite(_transform.pos.y()) ) _transform.pos.y() = 0.0;
+      if( !pcl_isfinite(_transform.pos.z()) ) _transform.pos.z() = 0.0;
+
+      float deltaR = sqrt(pow(rad2deg(matX(0, 0)), 2) +
+                          pow(rad2deg(matX(1, 0)), 2) +
+                          pow(rad2deg(matX(2, 0)), 2));
+      float deltaT = sqrt(pow(matX(3, 0) * 100, 2) +
+                          pow(matX(4, 0) * 100, 2) +
+                          pow(matX(5, 0) * 100, 2));
+
+      if (deltaR &lt; _deltaRAbort &amp;&amp; deltaT &lt; _deltaTAbort) {
+        break;
+      }
+    }
+  }
+</pre></div>
+</div>
+<p>3. 坐标转换
+算出了两块点云间的相对运动，但他们是在这两帧点云的局部坐标系下的，我们需要把它转换到世界坐标系下，因此需要进行转换。
+至此我们接完成了整个laserOdometry的计算，剩下的只需要把这些计算结果发布出去就好了。最后贴一张论文里这块内容的伪码图帮助大家更好的理解这块内容的一个框架：</p>
+<img alt="../_images/laserodometry.jpg" class="align-center" src="../_images/laserodometry.jpg" />
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../LaserMapping/lasermapping.html" class="btn btn-neutral float-right" title="LaserMapping源码分析" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../ScanRegistration/scanregistration.html" class="btn btn-neutral" title="ScanRegistration源码分析" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, improve100.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'1.0.1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+      <script type="text/javascript" src="../_static/translations.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

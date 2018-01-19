@@ -152,8 +152,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'loam_velodyne.tex', u'loam\\_velodyne Documentation',
-     u'improve100', 'manual'),
+    (master_doc, 'loam_velodyne.tex', u'loam\\_velodyne 源码解析',
+     u'cj.tong', 'manual'),
 ]
 
 
@@ -179,7 +179,7 @@ texinfo_documents = [
 ]
 
 pdf_documents = [
-          ('index', u'LoamVelodyne', u'LoamVelodyne', u'improve100'),
+          ('index', u'LoamVelodyne', u'LoamVelodyne', u'cj.tong'),
           ]
 pdf_stylesheets = ['a3','zh_CN']
 pdf_language = "zh_CN"
