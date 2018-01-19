@@ -274,6 +274,85 @@ inline void rotateYXZ(PointT& p,
   rotZ(p, angZ);
 }
 
+ /**
+    * Line is given by points AB.
+    * The result is the distance and the direction to closest point from the third point X.
+    */
+    inline float getLinePointDistance(const Eigen::Vector3f &A, const Eigen::Vector3f &B,
+      const Eigen::Vector3f &X, Eigen::Vector3f &unit_direction) {
+      Eigen::Vector3f BXcrossAX = (X-B).cross(X-A);
+      float BXcrossAXnorm = BXcrossAX.norm();
+      float lengthAB = (A-B).norm();
+      unit_direction = -BXcrossAX.cross(B-A) / (BXcrossAXnorm * lengthAB);
+      return BXcrossAXnorm / lengthAB;
+      }
+
+      inline float getSurfacePointDistance(const Eigen::Vector3f &A, const Eigen::Vector3f &B, const Eigen::Vector3f &C,
+          const Eigen::Vector3f &X, Eigen::Vector3f &surfNormal) {
+      surfNormal = (B-A).cross(C-A);
+      surfNormal.normalize();
+
+      float normalDotA = -surfNormal.dot(A);
+      float distance = surfNormal.dot(X) + normalDotA;
+      return distance;
+  }
+
+  template <typename PointT>
+  inline bool getCornerFeatureCoefficients(const PointT &A, const PointT &B,
+      const PointT &X, int iterration, PointT &coeff) {
+      Eigen::Vector3f direction;
+      float distance = getLinePointDistance(A.getVector3fMap(), B.getVector3fMap(), X.getVector3fMap(), direction);
+
+      float weight = 1.0;// 阻尼因子
+      if (iterration >= 5) {
+      weight = 1 - 1.8f * fabs(distance);// 点到直线距离越小阻尼因子越大
+      }
+
+      coeff.getVector3fMap() = direction * weight;
+      coeff.intensity = distance * weight;
+      return (weight > 0.1 && distance != 0); // 满足阈值(ld2 < 0.5)，将特征点插入
+  }
+
+  template <typename PointT>
+  inline bool getCornerFeatureCoefficients(const Eigen::Vector3f &A, const Eigen::Vector3f &B, const Eigen::Vector3f &X, PointT &coeff) {
+      Eigen::Vector3f direction;
+      float distance = getLinePointDistance(A, B, X, direction);
+
+      float weight = 1 - 0.9f * fabs(distance);
+      coeff.getVector3fMap() = direction * weight;
+      coeff.intensity = distance * weight;
+     
+      return (weight > 0.1);
+  }
+
+  template <typename PointT>
+  inline bool getSurfaceFeatureCoefficients(const PointT &A, const PointT &B, const PointT &C,
+      const PointT &X, int iterration, PointT &coefficients) {
+
+      Eigen::Vector3f surfNormal;
+      float distance = getSurfacePointDistance(A.getVector3fMap(), B.getVector3fMap(), C.getVector3fMap(),
+          X.getVector3fMap(), surfNormal);
+
+      float weight = 1;
+      if (iterration >= 5) {
+      weight = 1 - 1.8 * fabs(distance) / sqrt(X.getVector3fMap().norm());
+      }
+      coefficients.getVector3fMap() = weight * surfNormal;
+      coefficients.intensity = weight * distance;
+      //std::cout<<"weight:"<<weight<<",distance:"<<distance<<std::endl;
+      return (weight > 0.1 && distance != 0);
+  }
+
+  template <typename PointT>
+  inline bool getSurfaceFeatureCoefficients(const Eigen::Vector4f &planeCoef, const PointT &X, PointT &coefficients) {
+      float distance = planeCoef.head(3).dot(X.getVector3fMap()) + planeCoef(3);  
+      float weight = 1 - 0.9 * fabs(distance) / sqrt(X.getVector3fMap().norm());
+
+      coefficients.getVector3fMap() = planeCoef.head(3) * weight;
+      coefficients.intensity = distance * weight;
+      return (weight > 0.1);
+  }
+
 } // end namespace loam
 
 

@@ -33,7 +33,6 @@
 #include "loam_velodyne/LaserOdometry.h"
 #include "loam_velodyne/common.h"
 #include "math_utils.h"
-
 #include <pcl/filters/filter.h>
 #include <Eigen/Eigenvalues>
 #include <Eigen/QR>
@@ -444,19 +443,19 @@ bool LaserOdometry::hasNewData()
 
 
 void LaserOdometry::process()
-{
+{//判断数据是否到来
   if (!hasNewData()) {
     // waiting for new data to arrive...
     return;
   }
 
-  // reset flags, etc.
+  // reset flags, etc.初始化topic是否到来的flag
   reset();
 
-  if (!_systemInited) {
+  if (!_systemInited){ // 将订阅的数据保存为上一时刻的数据
     _cornerPointsLessSharp.swap(_lastCornerCloud);
     _surfPointsLessFlat.swap(_lastSurfaceCloud);
-
+//将边特征，平面特征点云存到kdtree
     _lastCornerKDTree.setInputCloud(_lastCornerCloud);
     _lastSurfaceKDTree.setInputCloud(_lastSurfaceCloud);
 
@@ -467,7 +466,7 @@ void LaserOdometry::process()
     return;
   }
 
-  pcl::PointXYZI coeff;
+  pcl::PointXYZI coeff;//雅克比矩阵值
   bool isDegenerate = false;
   Eigen::Matrix<float,6,6> matP;
 
@@ -477,46 +476,46 @@ void LaserOdometry::process()
 
   size_t lastCornerCloudSize = _lastCornerCloud->points.size();
   size_t lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
-
+// 上一时刻特征边(曲率大)上的点云个数大于10， 特征面内的点云大于100 保证足够多的特征点可用于t+1时刻的匹配
   if (lastCornerCloudSize > 10 && lastSurfaceCloudSize > 100) {
     std::vector<int> pointSearchInd(1);
     std::vector<float> pointSearchSqDis(1);
     std::vector<int> indices;
 
-    pcl::removeNaNFromPointCloud(*_cornerPointsSharp, *_cornerPointsSharp, indices);
-    size_t cornerPointsSharpNum = _cornerPointsSharp->points.size();
-    size_t surfPointsFlatNum = _surfPointsFlat->points.size();
+    pcl::removeNaNFromPointCloud(*_cornerPointsSharp, *_cornerPointsSharp, indices);//剔除一些异常点
+    size_t cornerPointsSharpNum = _cornerPointsSharp->points.size();//边特征个数
+    size_t surfPointsFlatNum = _surfPointsFlat->points.size();//平面特征个数
 
     _pointSearchCornerInd1.resize(cornerPointsSharpNum);
     _pointSearchCornerInd2.resize(cornerPointsSharpNum);
     _pointSearchSurfInd1.resize(surfPointsFlatNum);
     _pointSearchSurfInd2.resize(surfPointsFlatNum);
     _pointSearchSurfInd3.resize(surfPointsFlatNum);
-
+//接下来开始迭代配准
     for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++) {
       pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
       _laserCloudOri->clear();
-      _coeffSel->clear();
+      _coeffSel->clear();//两时刻点云配准协方差
 
       for (int i = 0; i < cornerPointsSharpNum; i++) {
-        transformToStart(_cornerPointsSharp->points[i], pointSel);
+        transformToStart(_cornerPointsSharp->points[i], pointSel);// 将点坐标转换到起始点云坐标系中
 
-        if (iterCount % 5 == 0) {
+        if (iterCount % 5 == 0) {//降低匹配次数，每隔5次迭代一次
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
           _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
-
+// 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
           int closestPointInd = -1, minPointInd2 = -1;
-          if (pointSearchSqDis[0] < 25) {
+          if (pointSearchSqDis[0] < 25) {//两桢之间的变换不会太剧烈，25作为阈值
             closestPointInd = pointSearchInd[0];
-            int closestPointScan = int(_lastCornerCloud->points[closestPointInd].intensity);
-
+            int closestPointScan = int(_lastCornerCloud->points[closestPointInd].intensity);//pointSel对应上一桢的那一线？closestPointScan
+//找到closestPointInd后找次近邻点的索引,作者没有直接nearKSearch找最近的两个点，也为了考虑这两个点要有效的吧，下面是不同约束，不能差3线以上，不能距离过大。
             float pointSqDis, minPointSqDis2 = 25;
             for (int j = closestPointInd + 1; j < cornerPointsSharpNum; j++) {
-              if (int(_lastCornerCloud->points[j].intensity) > closestPointScan + 2.5) {
+              if (int(_lastCornerCloud->points[j].intensity) > closestPointScan + 2.5) {// 找到与最邻近点相距3条线的特征点时跳出
                 break;
               }
 
-              pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);
+              pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);//直接计算，没有用nearksearch查找
 
               if (int(_lastCornerCloud->points[j].intensity) > closestPointScan) {
                 if (pointSqDis < minPointSqDis2) {
@@ -525,7 +524,7 @@ void LaserOdometry::process()
                 }
               }
             }
-            for (int j = closestPointInd - 1; j >= 0; j--) {
+            for (int j = closestPointInd - 1; j >= 0; j--) {// 向下三条线，找次临近点
               if (int(_lastCornerCloud->points[j].intensity) < closestPointScan - 2.5) {
                 break;
               }
@@ -541,67 +540,22 @@ void LaserOdometry::process()
             }
           }
 
-          _pointSearchCornerInd1[i] = closestPointInd;
-          _pointSearchCornerInd2[i] = minPointInd2;
+          _pointSearchCornerInd1[i] = closestPointInd;// 当前所有边特征点在上一时刻边特征点云中对应的最邻近点的索引
+          _pointSearchCornerInd2[i] = minPointInd2;// 当前所有边特征点在上一时刻边特征点云中对应的次邻近点的索引
+            }
         }
-
+	/*Jaccobian*/
         if (_pointSearchCornerInd2[i] >= 0) {
-          tripod1 = _lastCornerCloud->points[_pointSearchCornerInd1[i]];
-          tripod2 = _lastCornerCloud->points[_pointSearchCornerInd2[i]];
-
-          float x0 = pointSel.x;
-          float y0 = pointSel.y;
-          float z0 = pointSel.z;
-          float x1 = tripod1.x;
-          float y1 = tripod1.y;
-          float z1 = tripod1.z;
-          float x2 = tripod2.x;
-          float y2 = tripod2.y;
-          float z2 = tripod2.z;
-
-          float a012 = sqrt(((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
-                            * ((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
-                            + ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
-                              * ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
-                            + ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1))
-                              * ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1)));
-
-          float l12 = sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2));
-
-          float la = ((y1 - y2)*((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
-                      + (z1 - z2)*((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))) / a012 / l12;
-
-          float lb = -((x1 - x2)*((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
-                       - (z1 - z2)*((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1))) / a012 / l12;
-
-          float lc = -((x1 - x2)*((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
-                       + (y1 - y2)*((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1))) / a012 / l12;
-
-          float ld2 = a012 / l12;
-
-          // TODO: Why writing to a variable that's never read?
-          pointProj = pointSel;
-          pointProj.x -= la * ld2;
-          pointProj.y -= lb * ld2;
-          pointProj.z -= lc * ld2;
-
-          float s = 1;
-          if (iterCount >= 5) {
-            s = 1 - 1.8f * fabs(ld2);
-          }
-
-          coeff.x = s * la;
-          coeff.y = s * lb;
-          coeff.z = s * lc;
-          coeff.intensity = s * ld2;
-
-          if (s > 0.1 && ld2 != 0) {
+          const pcl::PointXYZI  &A = _lastCornerCloud->points[_pointSearchCornerInd1[i]];
+          const pcl::PointXYZI  &B = _lastCornerCloud->points[_pointSearchCornerInd2[i]];
+          pcl::PointXYZI coefficients;
+          if(getCornerFeatureCoefficients(A, B, pointSel, iterCount, coefficients)) {
             _laserCloudOri->push_back(_cornerPointsSharp->points[i]);
-            _coeffSel->push_back(coeff);
+            _coeffSel->push_back(coefficients);//求得的雅克比矩阵
           }
         }
       }
-
+//面特征采用类似思想，找最近邻，次近邻点。求雅克比矩阵值
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
 
@@ -657,56 +611,25 @@ void LaserOdometry::process()
           _pointSearchSurfInd2[i] = minPointInd2;
           _pointSearchSurfInd3[i] = minPointInd3;
         }
-
+	/*Jaccobian*/
         if (_pointSearchSurfInd2[i] >= 0 && _pointSearchSurfInd3[i] >= 0) {
-          tripod1 = _lastSurfaceCloud->points[_pointSearchSurfInd1[i]];
-          tripod2 = _lastSurfaceCloud->points[_pointSearchSurfInd2[i]];
-          tripod3 = _lastSurfaceCloud->points[_pointSearchSurfInd3[i]];
+          const pcl::PointXYZI &A = _lastSurfaceCloud->points[_pointSearchSurfInd1[i]];
+          const pcl::PointXYZI &B = _lastSurfaceCloud->points[_pointSearchSurfInd2[i]];
+          const pcl::PointXYZI &C = _lastSurfaceCloud->points[_pointSearchSurfInd3[i]];
 
-          float pa = (tripod2.y - tripod1.y) * (tripod3.z - tripod1.z)
-                     - (tripod3.y - tripod1.y) * (tripod2.z - tripod1.z);
-          float pb = (tripod2.z - tripod1.z) * (tripod3.x - tripod1.x)
-                     - (tripod3.z - tripod1.z) * (tripod2.x - tripod1.x);
-          float pc = (tripod2.x - tripod1.x) * (tripod3.y - tripod1.y)
-                     - (tripod3.x - tripod1.x) * (tripod2.y - tripod1.y);
-          float pd = -(pa * tripod1.x + pb * tripod1.y + pc * tripod1.z);
-
-          float ps = sqrt(pa * pa + pb * pb + pc * pc);
-          pa /= ps;
-          pb /= ps;
-          pc /= ps;
-          pd /= ps;
-
-          float pd2 = pa * pointSel.x + pb * pointSel.y + pc * pointSel.z + pd;
-
-          // TODO: Why writing to a variable that's never read? Maybe it should be used afterwards?
-          pointProj = pointSel;
-          pointProj.x -= pa * pd2;
-          pointProj.y -= pb * pd2;
-          pointProj.z -= pc * pd2;
-
-          float s = 1;
-          if (iterCount >= 5) {
-            s = 1 - 1.8f * fabs(pd2) / sqrt(calcPointDistance(pointSel));
-          }
-
-          coeff.x = s * pa;
-          coeff.y = s * pb;
-          coeff.z = s * pc;
-          coeff.intensity = s * pd2;
-
-          if (s > 0.1 && pd2 != 0) {
+          pcl::PointXYZI coefficients;
+          if(getSurfaceFeatureCoefficients(A, B, C, pointSel, iterCount, coefficients)) {
             _laserCloudOri->push_back(_surfPointsFlat->points[i]);
-            _coeffSel->push_back(coeff);
+            _coeffSel->push_back(coefficients);
           }
-        }
+        }      
       }
-
+// 匹配到的点的个数(即存在多少个约束),小于10则继续寻找 
       int pointSelNum = _laserCloudOri->points.size();
       if (pointSelNum < 10) {
         continue;
       }
-
+//LM进行运动估计，matA是雅克比矩阵，matAt*matA*matX = matAt*matB;其中matX是步长,（roll , ptich ,yaw,x,y,z）
       Eigen::Matrix<float,Eigen::Dynamic,6> matA(pointSelNum, 6);
       Eigen::Matrix<float,6,Eigen::Dynamic> matAt(6,pointSelNum);
       Eigen::Matrix<float,6,6> matAtA;
@@ -771,6 +694,7 @@ void LaserOdometry::process()
         matA(i, 5) = atz;
         matB(i, 0) = -0.05 * d2;
       }
+      //QR
       matAt = matA.transpose();
       matAtA = matAt * matA;
       matAtB = matAt * matB;
@@ -836,7 +760,7 @@ void LaserOdometry::process()
       }
     }
   }
-
+/*Transformation **/
   Angle rx, ry, rz;
   accumulateRotation(_transformSum.rot_x,
                      _transformSum.rot_y,

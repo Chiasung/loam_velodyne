@@ -30,8 +30,8 @@
 //   J. Zhang and S. Singh. LOAM: Lidar Odometry and Mapping in Real-time.
 //     Robotics: Science and Systems Conference (RSS). Berkeley, CA, July 2014.
 
-#ifndef LOAM_LASERMAPPING_H
-#define LOAM_LASERMAPPING_H
+#ifndef LOAM_LASERLOCALIZATION_H
+#define LOAM_LASERLOCALIZATION_H
 
 
 #include "Twist.h"
@@ -43,6 +43,10 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <tf/transform_listener.h>
+#include <tf/tf.h>
+
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
@@ -90,11 +94,11 @@ typedef struct IMUState2 {
 /** \brief Implementation of the LOAM laser mapping component.
  *
  */
-class LaserMapping {
+class LaserLocalization{
 public:
-  explicit LaserMapping(const float& scanPeriod = 0.1,
+  explicit LaserLocalization(const float& scanPeriod = 0.1,
                         const size_t& maxIterations = 10);
-  ~LaserMapping();
+  ~LaserLocalization(){};
 
   /** \brief Setup component in active mode.
    *
@@ -159,7 +163,11 @@ protected:
   /** \brief Publish the current result via the respective topics. */
   void publishResult();
 
-  bool saveLaserCloudCubeArrayToFiles();
+  bool loadLaserCloudCubeArrayFromFiles();
+
+  void initialPoseHandler(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
+
+  void handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStamped& msg);
 
 private:
 
@@ -168,7 +176,7 @@ private:
     return i + _laserCloudWidth * j + _laserCloudWidth * _laserCloudHeight * k;
   }
 
-  std::string fileNameFormat(const std::string filePath, int number)
+  std::string pcdFileNameFormat(const std::string filePath, int number)
   {
     std::stringstream ss;
     std::string str;
@@ -179,15 +187,22 @@ private:
 
   }
 
+  double getYaw(tf::Pose& t)
+  {
+    double yaw, pitch, roll;
+    t.getBasis().getEulerYPR(yaw,pitch,roll);
+    return yaw;
+  }
+
   std::string _filePath;
   float _scanPeriod;          ///< time per scan
   const int _stackFrameNum;
   const int _mapFrameNum;
   long _frameCount;
   long _mapFrameCount;
-  
+
   bool _usePlanarMotion;
-  float _planarMotionRate;
+    float _planarMotionRate;
   bool _useStrictPlanar;
   bool _sendRegisteredCloud;
   bool _sendSurroundCloud;
@@ -260,9 +275,12 @@ private:
   ros::Subscriber _subLaserCloudFullRes;      ///< full resolution cloud message subscriber
   ros::Subscriber _subLaserOdometry;          ///< laser odometry message subscriber
   ros::Subscriber _subImu;                    ///< IMU message subscriber
+  ros::Subscriber _subInitialPose;
+
+  tf::TransformListener* tf_;
 
 };
 
 } // end namespace loam
 
-#endif //LOAM_LASERMAPPING_H
+#endif //LOAM_LASERLOCALIZATION_H

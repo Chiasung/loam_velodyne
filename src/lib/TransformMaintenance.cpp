@@ -191,7 +191,7 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _transformSum[4] = laserOdometry->pose.pose.position.y;
   _transformSum[5] = laserOdometry->pose.pose.position.z;
 
-  transformAssociateToMap();
+  transformAssociateToMap();//这个函数调用有优化结果后的数据 _transformMapped
 
   geoQuat = tf::createQuaternionMsgFromRollPitchYaw
       (_transformMapped[2], -_transformMapped[0], -_transformMapped[1]);

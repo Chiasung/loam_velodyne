@@ -162,7 +162,7 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   // reset internal buffers and set IMU start state based on current scan time
   reset(scanTime);
 
-  // determine scan start and end orientations
+  // determine scan start and end orientations计算激光的起始位置，终止位置
   float startOri = -std::atan2(laserCloudIn[0].y, laserCloudIn[0].x);
   float endOri = -std::atan2(laserCloudIn[cloudSize - 1].y,
                              laserCloudIn[cloudSize - 1].x) + 2 * float(M_PI);
@@ -176,33 +176,33 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   pcl::PointXYZI point;
   std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans(_scanMapper.getNumberOfScanRings());
 
-  // extract valid points from input cloud
+  // extract valid points from input cloud从点云中提取可用的点
   for (int i = 0; i < cloudSize; i++) {
     point.x = laserCloudIn[i].y;
     point.y = laserCloudIn[i].z;
     point.z = laserCloudIn[i].x;
 
-    // skip NaN and INF valued points
+    // skip NaN and INF valued points过滤掉点云中错误的值
     if (!pcl_isfinite(point.x) ||
         !pcl_isfinite(point.y) ||
         !pcl_isfinite(point.z)) {
       continue;
     }
 
-    // skip zero valued points
+    // skip zero valued points过滤激光周围的点
     if (point.x * point.x + point.y * point.y + point.z * point.z < 0.0001) {
       continue;
     }
 
     // calculate vertical point angle and scan ID
-    float angle = std::atan(point.y / std::sqrt(point.x * point.x + point.z * point.z));
-    int scanID = _scanMapper.getRingForAngle(angle);
-    if (scanID >= _scanMapper.getNumberOfScanRings() || scanID < 0 ){
+    float angle = std::atan(point.y / std::sqrt(point.x * point.x + point.z * point.z));//计算垂直方向角度，这里有一个旋转轴问题，x(z),y(x),z(y)
+    int scanID = _scanMapper.getRingForAngle(angle);//计算激光线束
+    if (scanID >= _scanMapper.getNumberOfScanRings() || scanID < 0 ){//范围0-15
       continue;
     }
 
     // calculate horizontal point angle
-    float ori = -std::atan2(point.x, point.z);
+    float ori = -std::atan2(point.x, point.z);//计算水平角度
     if (!halfPassed) {
       if (ori < startOri - M_PI / 2) {
         ori += 2 * M_PI;
@@ -225,7 +225,7 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
     // calculate relative scan time based on point orientation
     float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
-    point.intensity = scanID + relTime;
+    point.intensity = scanID + relTime;//点intensity域，整数部分为scanID,小数部分为扫描时间，这样就完成点云中每个点分类
 
     // project point to the start of the sweep using corresponding IMU data
     if (hasIMUData()) {
@@ -239,12 +239,12 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   // construct sorted full resolution cloud
   cloudSize = 0;
   for (int i = 0; i < _scanMapper.getNumberOfScanRings(); i++) {
-    _laserCloud += laserCloudScans[i];
+    _laserCloud += laserCloudScans[i];//把整理好后的点云，按照激光束的线序存储在_laserCloud点云中。
 
     IndexRange range(cloudSize, 0);
     cloudSize += laserCloudScans[i].size();
     range.second = cloudSize > 0 ? cloudSize - 1 : 0;
-    _scanIndices.push_back(range);
+    _scanIndices.push_back(range);//整理好后的点云索引，second??,16个pair中，每个pair，first代表每一束激光点云起始位置，second代表每一束激光的终点位置
   }
 
   // extract features
